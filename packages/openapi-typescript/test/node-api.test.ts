@@ -1892,6 +1892,42 @@ export type operations = Record<string, never>;`,
   });
 
   test.each([
+    true,
+    false,
+  ])("required-only allOf reuses its helper with enumValues (enum first: %s)", async (enumFirst) => {
+    const Status = { type: "string", enum: ["active", "inactive", "WithRequiredObject", "WithRequired\\u004fbject"] };
+    const Entity = { type: "object", properties: { name: { type: "string" } } };
+    const RequiredEntity = {
+      allOf: [{ $ref: "#/components/schemas/Entity" }, { type: "object", required: ["name"] }],
+    };
+    const schemas = { Entity, RequiredEntity, AnotherRequiredEntity: RequiredEntity };
+    const result = await openapiTS(
+      JSON.stringify({
+        openapi: "3.0.3",
+        info: { title: "Helper regression", version: "1.0.0" },
+        paths: {},
+        components: { schemas: enumFirst ? { Status, ...schemas } : { ...schemas, Status } },
+      }),
+      { enumValues: true, transform: () => undefined },
+    );
+
+    expect(result.match(/type WithRequiredObject</g)).toHaveLength(1);
+    expect(result.split('WithRequiredObject<components["schemas"]["Entity"], "name">')).toHaveLength(3);
+    expect(result).toContain("export const statusValues:");
+    expectTypeScriptToCompile(
+      result,
+      `
+        const status: components["schemas"]["Status"] = statusValues[0];
+        const valid: components["schemas"]["RequiredEntity"] = { name: "value" };
+        // @ts-expect-error name remains required
+        const missing: components["schemas"]["AnotherRequiredEntity"] = {};
+        // @ts-expect-error the original property type is preserved
+        const wrong: components["schemas"]["RequiredEntity"] = { name: 1 };
+      `,
+    );
+  });
+
+  test.each([
     ["public inject alias", { inject: "type WithRequiredObject = unknown;" }],
     ["escaped inject alias", { inject: "type WithRequired\\u004fbject = unknown;" }],
     [

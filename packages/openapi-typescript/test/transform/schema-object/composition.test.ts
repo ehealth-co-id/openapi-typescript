@@ -4,6 +4,7 @@ import {
   type FooterDeclaration,
   propertySignature,
   renderFooterDeclaration,
+  tsArrayLiteralExpression,
   typeLiteral,
 } from "../../../src/lib/ts.js";
 import transformSchemaObject from "../../../src/transform/schema-object.js";
@@ -1080,12 +1081,29 @@ describe("composition", () => {
     ).toBe('WithRequiredObject<Omit<components["schemas"]["parent"], "operation">, "name">');
   });
 
+  const enumFooter: FooterDeclaration[] = [];
+  const enumValues = tsArrayLiteralExpression("statusValues", "string", ["active"], {
+    export: true,
+    readonly: true,
+    injectFooter: enumFooter,
+  });
   test.each([
-    "WithRequiredObject",
-    "WithRequired\\u004fbject",
-  ])("allOf > footer helper conflict %s uses the inline object constraint", (name) => {
+    ["direct name", "interface WithRequiredObject { caller: true }"],
+    ["escaped name", "interface WithRequired\\u004fbject { caller: true }"],
+    ["enum values suffix", `${enumValues}\ninterface WithRequiredObject { caller: true }`],
+    ["built-in helper suffix", `${enumFooter[0]}\ninterface WithRequiredObject { caller: true }`],
+    [
+      "public builder source",
+      tsArrayLiteralExpression(
+        "statusValues",
+        "string> = []; type WithRequiredObject = unknown; const other: ReadonlyArray<string",
+        ["active"],
+        { export: true, readonly: true },
+      ),
+    ],
+  ])("allOf > footer helper conflict %s uses the inline object constraint", (_name, source) => {
     const options = baseOptions();
-    options.ctx.injectFooter = [`interface ${name} { caller: true }`];
+    options.ctx.injectFooter = [source];
     options.ctx.transform = () => undefined;
     const result = astToString(
       transformSchemaObject(

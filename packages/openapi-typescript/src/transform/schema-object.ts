@@ -2,9 +2,10 @@ import { parseRef } from "@redocly/openapi-core/lib/ref-utils.js";
 import {
   addJSDocComment,
   BOOLEAN,
+  type FooterDeclaration,
   INDENT,
   indexSignature,
-  isWithRequiredObjectHelper,
+  isGeneratedFooterHelper,
   NEVER,
   NULL,
   NUMBER,
@@ -38,6 +39,9 @@ import type { PropertySignatureLike, ReferenceObject, SchemaObject, TransformNod
 interface TransformObserver {
   replaced: boolean;
 }
+
+// Track schema-generated values per footer; public string builders also accept arbitrary source.
+const enumValuesDeclarations = new WeakMap<FooterDeclaration[], Set<TSNode>>();
 
 /**
  * Transform SchemaObject nodes (4.8.24)
@@ -253,7 +257,14 @@ function transformSchemaObjectWithCompositionObserved(
           },
         );
 
-        options.ctx.injectFooter.push(enumValuesArray);
+        const footer = options.ctx.injectFooter;
+        let generatedValues = enumValuesDeclarations.get(footer);
+        if (!generatedValues) {
+          generatedValues = new Set();
+          enumValuesDeclarations.set(footer, generatedValues);
+        }
+        generatedValues.add(enumValuesArray);
+        footer.push(enumValuesArray);
       }
 
       return unionType;
@@ -659,7 +670,10 @@ function shouldInlineWithRequiredObject(options: TransformNodeOptions): boolean 
   if (options.ctx.enum || options.ctx.rootTypesNoSchemaPrefix || options.ctx.inject) {
     return true;
   }
-  return options.ctx.injectFooter.some((node) => typeof node === "string" && !isWithRequiredObjectHelper(node));
+  const generatedValues = enumValuesDeclarations.get(options.ctx.injectFooter);
+  return options.ctx.injectFooter.some(
+    (node) => typeof node === "string" && !isGeneratedFooterHelper(node) && !generatedValues?.has(node),
+  );
 }
 
 /**

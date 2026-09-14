@@ -848,6 +848,16 @@ export function isWithRequiredObjectHelper(node: FooterDeclaration): boolean {
   return node === WITH_REQUIRED_OBJECT;
 }
 
+/** Only complete built-in declarations are safe to reuse alongside generated helpers. */
+export function isGeneratedFooterHelper(node: FooterDeclaration): boolean {
+  return (
+    isWithRequiredObjectHelper(node) ||
+    node === HELPER_FLATTENED_DEEP_REQUIRED ||
+    node === HELPER_WITH_REQUIRED ||
+    node === HELPER_READONLY_ARRAY
+  );
+}
+
 /**
  * Create a WithRequiredObject<X, Y> type for exact object constraints.
  * Structural callables and constructors are rejected; nominal Function remains object-like.
